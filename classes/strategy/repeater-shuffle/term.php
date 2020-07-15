@@ -32,6 +32,25 @@ class Term extends Strategy {
 	}
 
 	/**
+	 * Get value object for given term ID.
+	 *
+	 * @param  string $id The element ID with "term_" at the beginning.
+	 * @return object|null Value object with id and type or null when element not found.
+	 */
+	protected function getElement( $id ) {
+		if ( $this->isValidId( $id ) ) {
+			$id   = $this->getNumericId( $id );
+			$term = get_term_by( 'id', $id );
+			if ( isset( $term->taxonomy ) ) {
+				return (object) [
+					'id'   => $id,
+					'type' => $term->taxonomy,
+				];
+			}
+		}
+	}
+
+	/**
 	 * @param int $id
 	 *
 	 * @return mixed

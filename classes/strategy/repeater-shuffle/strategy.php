@@ -7,6 +7,12 @@ abstract class Strategy {
 	 * @var string Element ID prefix.
 	 */
 	protected $id_prefix;
+
+	/**
+	 * @var false|int Translation ID for given element.
+	 */
+	protected $trid;
+
 	/**
 	 * Check if this is valid ID of processed post, term etc.
 	 *
@@ -15,6 +21,34 @@ abstract class Strategy {
 	 * @return bool
 	 */
 	abstract public function isValidId( $id );
+
+	/**
+	 * Get value object for given element ID.
+	 *
+	 * @param  int|string $id The element ID.
+	 *
+	 * @return object|null Value object with id and type or null when element not found.
+	 */
+	abstract protected function getElement( $id );
+
+	/**
+	 * Get translation ID for given element.
+	 *
+	 * @param int|string $elementId Processed element (post, taxonomy) ID.
+	 *
+	 * @return false|int Translation ID or false if does not exist.
+	 */
+	public function getTrid( $elementId ) {
+		if ( null === $this->trid ) {
+			$this->trid = false;
+			$element    = $this->getElement( $elementId );
+			if ( isset( $element->id, $element->type ) ) {
+				$type       = apply_filters( 'wpml_element_type', $element->type );
+				$this->trid = apply_filters( 'wpml_element_trid', $this->trid, $element->id, $type );
+			}
+		}
+		return $this->trid;
+	}
 
 	/**
 	 * Gets all post meta or term meta for given ID.

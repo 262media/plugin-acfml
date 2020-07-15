@@ -4,7 +4,7 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInit95e2406051fa1009d216c2846c35dced
+class ComposerStaticIniteab7e44ad76c962ded5f3b7dfdbdae55
 {
     public static $classMap = array (
         'ACFML\\Repeater\\Shuffle\\Post' => __DIR__ . '/../..' . '/classes/strategy/repeater-shuffle/post.php',
@@ -46,7 +46,7 @@ class ComposerStaticInit95e2406051fa1009d216c2846c35dced
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->classMap = ComposerStaticInit95e2406051fa1009d216c2846c35dced::$classMap;
+            $loader->classMap = ComposerStaticIniteab7e44ad76c962ded5f3b7dfdbdae55::$classMap;
 
         }, null, ClassLoader::class);
     }

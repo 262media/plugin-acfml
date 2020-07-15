@@ -10,6 +10,7 @@ use ACFML\Repeater\Shuffle\Strategy;
 class WPML_ACF_Repeater_Shuffle {
 
 	const ACTION_SYNCHRONISE = 'wpml_synchronise_acf_fields_translations_nonce';
+	const SYNCHRONISE_WP_OPTION_NAME = 'acfml_synchronise_repeater_fields';
 
 	/**
 	 * @var array Meta data before the shuffle.
@@ -35,6 +36,11 @@ class WPML_ACF_Repeater_Shuffle {
 	private $shuffled;
 
 	/**
+	 * @var bool|int
+	 */
+	private $trid;
+
+	/**
 	 * WPML_ACF_Repeater_Shuffle constructor.
 	 *
 	 * @param Strategy $shuffled
@@ -47,6 +53,7 @@ class WPML_ACF_Repeater_Shuffle {
 	 * Registers hooks used while repeater field's values are being updated.
 	 */
 	public function register_hooks() {
+		add_action( 'acf/save_post', array( $this, 'storeSynchroniseOption' ), 4, 1 );
 		add_action( 'acf/save_post', array( $this, 'store_state_before' ), 5, 1 );
 		add_action( 'acf/save_post', array( $this, 'update_translated_repeaters' ), 15, 1 );
 		add_action( 'acf/render_fields', array( $this, 'display_synchronisation_switcher' ), 10, 2 );
@@ -59,15 +66,15 @@ class WPML_ACF_Repeater_Shuffle {
 	 * @param int   $element_id Current post ID.
 	 */
 	public function display_synchronisation_switcher( $fields, $element_id = 0 ) {
-		if ( $this->should_display_synchronisation_switcher( $element_id ) ) {
+		if ( $this->hasRepeaterField( $fields ) && $this->should_display_synchronisation_switcher( $element_id ) ) {
 			?>
-			<div class="acf-field">
+			<div class="acf-field acfml-synchronise-repeater-checkbox">
 				<div class="acf-label">
 					<label for="wpml_synchronise_acf_fields_translations"><?php esc_html_e( 'Synchronise translations', 'acfml' ); ?></label>
 				</div>
 				<div class="acf-input">
 					<div class="acf-input-wrap">
-						<input type="checkbox" name="wpml_synchronise_acf_fields_translations" value="synchronise" />
+						<input type="checkbox" name="wpml_synchronise_acf_fields_translations" value="synchronise" <?php checked( $this->isSynchroniseOptionChecked( $element_id ), true, true ); ?> />
 						<?php wp_nonce_field( self::ACTION_SYNCHRONISE, self::ACTION_SYNCHRONISE ); ?>
 						<?php esc_html_e( 'Synchronise repeater sub-fields positions in post translations (record drag-and-drop moves and do the same moves in other translations).', 'acfml' ); ?>
 					</div>
@@ -254,8 +261,8 @@ class WPML_ACF_Repeater_Shuffle {
 	}
 
 	/**
-     * Checks if checkbox to synchronise is selected.
-     *
+	 * Checks if checkbox to synchronise is selected.
+	 *
 	 * @return bool
 	 */
 	private function synchronise_option_selected() {
@@ -265,4 +272,66 @@ class WPML_ACF_Repeater_Shuffle {
 			&& 'synchronise' === $_POST['wpml_synchronise_acf_fields_translations'];
 	}
 
+	/**
+     * Checks if synchronise checkbox has been sent during the post save.
+     *
+	 * @return bool
+	 */
+	private function synchroniseOptionSent() {
+		return isset( $_POST[ self::ACTION_SYNCHRONISE ] );
+	}
+
+	/**
+	 * Checks if post/taxonomy has repeater field associated with it.
+	 *
+	 * @param array $fields Fields belonging to the element (post or taxonomy).
+	 *
+	 * @return bool
+	 */
+	private function hasRepeaterField( $fields ) {
+		foreach ( (array) $fields as $field ) {
+			if ( isset( $field['type'] ) && 'repeater' === $field['type'] ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Save repeater synchronisation option in wp_options table.
+	 *
+	 * @param int $elementID Processed element (post, taxonomy) ID.
+	 */
+	public function storeSynchroniseOption( $elementID ) {
+		if ( $this->shuffled->hasTranslations( $elementID ) ) {
+			$trid = $this->shuffled->getTrid( $elementID );
+			if ( $trid && $this->synchroniseOptionSent() ) {
+				$synchroniseOption = get_option( self::SYNCHRONISE_WP_OPTION_NAME, [] );
+				if ( $this->synchronise_option_selected() ) {
+					$synchroniseOption[ $trid ] = true;
+				} else {
+					$synchroniseOption[ $trid ] = false;
+				}
+				update_option( self::SYNCHRONISE_WP_OPTION_NAME, $synchroniseOption );
+			}
+		}
+	}
+
+	/**
+	 * Get repeater synchronisation option from wp_options table.
+	 *
+	 * @param int $elementID Processed element (post, taxonomy) ID.
+	 *
+	 * @return bool
+	 */
+	private function isSynchroniseOptionChecked( $elementID ) {
+		$trid = $this->shuffled->getTrid( $elementID );
+		if ( $trid ) {
+			$synchroniseOption = get_option( self::SYNCHRONISE_WP_OPTION_NAME, [] );
+			if ( isset( $synchroniseOption[ $trid ] ) ) {
+				return (bool) $synchroniseOption[ $trid ];
+			}
+		}
+		return true;
+	}
 }

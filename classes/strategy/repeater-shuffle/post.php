@@ -18,6 +18,22 @@ class Post extends Strategy {
 	}
 
 	/**
+	 * Get value object for given post ID.
+	 *
+	 * @param  int $id The post ID
+	 *
+	 * @return object|null Value object with id and type or null when element not found.
+	 */
+	protected function getElement( $id ) {
+		if ( $this->isValidId( $id ) ) {
+			return (object) [
+				'id'   => $id,
+				'type' => get_post_type( $id ),
+			];
+		}
+	}
+
+	/**
 	 * @param int $id
 	 *
 	 * @return mixed

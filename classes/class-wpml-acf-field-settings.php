@@ -21,11 +21,14 @@ class WPML_ACF_Field_Settings {
 		$this->translation_management = $translation_management;
 	}
 
+	/**
+	 * Register WordPress hooks related to ACF field settings.
+	 */
 	public function add_hooks() {
-		// add radio buttons on Field Group page
+		// add radio buttons on Field Group page.
 		add_action( 'acf/render_field_settings', array( $this, 'render_field_settings'), 10, 1);
 
-		// same as above run when user is changing field type on field group edit screen
+		// same as above run when user is changing field type on field group edit screen.
 		if ( function_exists( 'acf_maybe_get_POST' ) ) {
 			$field = acf_maybe_get_POST('field');
 			if ( isset( $field['type'] ) ) {
@@ -33,18 +36,21 @@ class WPML_ACF_Field_Settings {
 			}
 		}
 
-		// handle setting sync preferences on Field Group page
+		// handle setting sync preferences on Field Group page.
 		add_filter( 'acf/update_field', array( $this, 'update_field_settings' ), 10, 1);
 
-		// when user adds new field value on post edit screen
+		// when user adds new field value on post edit screen.
 		add_filter( 'acf/update_value', array( $this, 'field_value_updated'), 10, 4 );
 
-		// use case when user updates sync prefernces on post edit screen
+		// use case when user updates sync prefernces on post edit screen.
 		add_action( 'wpml_single_custom_field_sync_option_updated', array($this, 'user_set_sync_preferences'), 10, 1);
 		add_action( 'wpml_custom_fields_sync_option_updated', array($this, 'user_set_sync_preferences'), 10, 1);
 
-		// mark field as not migrated yet
-		add_filter( "acf/get_field_label", array($this, "mark_not_migrated_field"), 10, 2);
+		// mark field as not migrated yet.
+		add_filter( 'acf/get_field_label', array( $this, 'mark_not_migrated_field' ), 10, 2 );
+
+		// repeater and flexible fields hsould be set to Copy.
+		add_filter( 'acf/get_field_label', array( $this, 'adviceToSetCopyForField' ), 10, 2 );
 	}
 
 	/**
@@ -56,10 +62,6 @@ class WPML_ACF_Field_Settings {
 	 * @param array $field ACF field array.
 	 */
 	public function render_field_settings( $field ) {
-		if ( $this->field_should_be_set_to_copy( $field ) ) {
-			return;
-		}
-
 		acf_render_field_setting( $field, array(
 			'label'			=> __('Translation preferences','acfml'),
 			'instructions'	=> __('What to do with field\'s value when post/page is going to be translated','acf'),
@@ -123,9 +125,6 @@ class WPML_ACF_Field_Settings {
 	 * @param array $field The ACF field being updated.
 	 */
 	private function save_field_settings( $field ) {
-		if ( $this->field_should_be_set_to_copy( $field ) ) {
-			$field['wpml_cf_preferences'] = WPML_COPY_CUSTOM_FIELD;
-		}
 		foreach ( $this->tm_setting_index as $setting_index ) {
 			$this->translation_management->settings[ $setting_index ][ $field['name'] ] = $field['wpml_cf_preferences'];
 		}
@@ -146,7 +145,7 @@ class WPML_ACF_Field_Settings {
 			$post_id = $this->get_post_with_custom_field( $field_name );
 			$field_object = get_field_object( $field_name, $post_id );
 
-			if ( $this->is_field_object_valid( $field_object ) && ! $this->field_should_be_set_to_copy( $field_object ) ) {
+			if ( $this->is_field_object_valid( $field_object ) ) {
 				if ( $field_object['wpml_cf_preferences'] != $field_preferences ) {
 					$field_post = get_post( $field_object['ID'] );
 					$field_post_content = maybe_unserialize( $field_post->post_content );
@@ -157,8 +156,6 @@ class WPML_ACF_Field_Settings {
 					) );
 				}
 			}
-
-			$this->maybe_revert_field_preferences_to_copy( $field_object, $field_name );
 		}
 
 		// this action runs also for case 'icl_tcf_translation', @see \TranslationManagement::ajax_calls
@@ -256,7 +253,7 @@ class WPML_ACF_Field_Settings {
 	 * @return string Field's label updated with exclamation mark.
 	 */
 	public function mark_not_migrated_field( $label, $field ) {
-		if ( ! isset( $field['wpml_cf_preferences'] ) && $field['ID'] > 0 && ! $this->field_should_be_set_to_copy( $field ) ) {
+		if ( ! isset( $field['wpml_cf_preferences'] ) && $field['ID'] > 0 && $this->isFieldGroupEditScreen() ) {
 			$post_exist = $this->get_post_with_custom_field( $field['name'] );
 			if ( $post_exist ) {
 				$label .= ' <span class="dashicons dashicons-warning acfml-not-migrated"
@@ -265,6 +262,36 @@ class WPML_ACF_Field_Settings {
 		}
 
 		return $label;
+	}
+
+	/**
+	 * Repeater and flexible fields' translation preferences should be set to Copy.
+	 *
+	 * Advice to set translation preferences to Copy for repeater and flexible fields
+	 * if not already set.
+	 *
+	 * @param string $label
+	 * @param array  $field
+	 *
+	 * @return string
+	 */
+	public function adviceToSetCopyForField( $label, $field ) {
+		$fieldNotSetToCopy = ! isset( $field['wpml_cf_preferences'] ) || WPML_COPY_CUSTOM_FIELD !== (int) $field['wpml_cf_preferences'];
+		if ( $this->field_should_be_set_to_copy( $field ) && $fieldNotSetToCopy && $this->isFieldGroupEditScreen() ) {
+			$label .= ' <span class="dashicons dashicons-lightbulb acfml-advice-copy-setting"
+ 							title="' . esc_attr_x( 'We recommend using the "Copy" translation preferences for repeater and flexible fields. You can use other translation preferences, but if you notice any translation issues with subfields, please go back here and try to change this setting.', 'acfml' ) . '"></span>';
+		}
+		return $label;
+	}
+
+	/**
+	 * Checks if it is currently displayed ACF Field Group edit screen.
+	 *
+	 * @return bool
+	 */
+	private function isFieldGroupEditScreen() {
+		global $post_type, $editing;
+		return 'acf-field-group' === $post_type && true === $editing;
 	}
 
 	/**
@@ -280,22 +307,5 @@ class WPML_ACF_Field_Settings {
 			'flexible_content',
 		];
 		return isset( $field['type'] ) && in_array( $field['type'], $fields_always_copied, true );
-	}
-
-	/**
-	 * Reverts back WPML custom field translation prefrences to "Copy" if field with
-	 * this type should be always set to copy.
-	 *
-	 * @param array  $field      ACF field data.
-	 * @param string $field_name Custom field name.
-	 */
-	private function maybe_revert_field_preferences_to_copy( $field, $field_name ) {
-		if ( $this->field_should_be_set_to_copy( $field ) ) {
-			if ( ! isset( $this->translation_management->settings['custom_fields_translation'][ $field_name ] )
-				 || WPML_COPY_CUSTOM_FIELD !== $this->translation_management->settings['custom_fields_translation'][ $field_name ] ) {
-				$this->translation_management->settings['custom_fields_translation'][ $field_name ] = WPML_COPY_CUSTOM_FIELD;
-				$this->translation_management->save_settings();
-			}
-		}
 	}
 }
